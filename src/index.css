@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Warm ivory */
+  --background: 40 33% 97%;
+  /* Deep warm charcoal */
+  --foreground: 24 10% 10%;
+  /* Slightly warm card */
+  --card: 36 25% 93%;
+  --card-foreground: 24 10% 10%;
+  /* Subtle muted */
+  --muted: 35 18% 86%;
+  --muted-foreground: 25 8% 48%;
+  /* Dusty rose */
+  --accent: 350 38% 68%;
+  --accent-foreground: 0 0% 100%;
+  /* Light cream — usado como texto em fundos escuros */
+  --secondary: 38 55% 96%;
+  --secondary-foreground: 24 10% 10%;
+  /* Border */
+  --border: 35 20% 84%;
+}
+
+* {
+  border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
