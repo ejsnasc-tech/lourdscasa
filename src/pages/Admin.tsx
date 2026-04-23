@@ -823,8 +823,7 @@ const SettingsTab = ({ settings, onUpdate }: SettingsTabProps) => {
           )}
           <button
             onClick={handleSaveWa}
-            disabled={!waNumber || waNumber === settings.whatsapp}
-            className="bg-accent text-accent-foreground font-body text-xs uppercase tracking-widest px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-35 disabled:cursor-not-allowed"
+            className="bg-accent text-accent-foreground font-body text-xs uppercase tracking-widest px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
           >
             Salvar Número
           </button>
