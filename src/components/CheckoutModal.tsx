@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X, CheckCircle, User, LogOut, ChevronRight } from 'lucide-react'
+﻿import { useState } from 'react'
+import { X, CheckCircle, User, LogOut, ChevronRight, AlertCircle } from 'lucide-react'
 import { useCart, parseBRL } from '@/context/CartContext'
 import { useCustomer, type Customer, EMPTY_CUSTOMER } from '@/context/CustomerContext'
 import { getSettings } from '@/store'
@@ -12,24 +12,72 @@ interface CheckoutModalProps {
 const fmt = (n: number) =>
   'R$ ' + n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
-const inputCls =
-  'w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent transition-colors font-body placeholder:text-muted-foreground/50'
+// ── Validadores ───────────────────────────────────────────────────────────────
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())
+const isValidPhone = (v: string) => {
+  const digits = v.replace(/\D/g, '')
+  return digits.length >= 10 && digits.length <= 11
+}
 
-const Field = ({
-  label, children, half,
-}: {
+type Errors = Partial<Record<keyof Customer | 'global', string>>
+
+const validate = (form: Customer): Errors => {
+  const e: Errors = {}
+  if (!form.name.trim()) e.name = 'Nome é obrigatório'
+  if (!form.phone.trim()) {
+    e.phone = 'Telefone é obrigatório'
+  } else if (!isValidPhone(form.phone)) {
+    e.phone = 'Telefone inválido — ex: (79) 99999-9999'
+  }
+  if (!form.email.trim()) {
+    e.email = 'E-mail é obrigatório'
+  } else if (!isValidEmail(form.email)) {
+    e.email = 'E-mail inválido — ex: nome@email.com'
+  }
+  if (!form.street.trim()) e.street = 'Rua é obrigatória'
+  if (!form.number.trim()) e.number = 'Número é obrigatório'
+  if (!form.neighborhood.trim()) e.neighborhood = 'Bairro é obrigatório'
+  if (!form.cep.trim()) {
+    e.cep = 'CEP é obrigatório'
+  } else if (form.cep.replace(/\D/g, '').length !== 8) {
+    e.cep = 'CEP inválido — ex: 49000-000'
+  }
+  if (!form.city.trim()) e.city = 'Cidade é obrigatória'
+  if (!form.state.trim()) {
+    e.state = 'Estado é obrigatório'
+  } else if (form.state.trim().length !== 2) {
+    e.state = 'Use a sigla — ex: SE'
+  }
+  return e
+}
+
+// ── Componentes auxiliares ────────────────────────────────────────────────────
+const inputBase = 'w-full bg-background border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none transition-colors font-body placeholder:text-muted-foreground/50'
+const inputOk   = `${inputBase} border-border focus:border-accent`
+const inputErr  = `${inputBase} border-red-400 focus:border-red-500`
+
+interface FieldProps {
   label: string
-  children: React.ReactNode
+  error?: string
   half?: boolean
-}) => (
+  children: React.ReactNode
+}
+
+const Field = ({ label, error, half, children }: FieldProps) => (
   <div className={half ? '' : 'col-span-2'}>
     <label className="font-body text-[10px] uppercase tracking-widest text-muted-foreground mb-1 block">
-      {label}
+      {label} <span className="text-red-400">*</span>
     </label>
     {children}
+    {error && (
+      <p className="flex items-center gap-1 font-body text-[10px] text-red-500 mt-1">
+        <AlertCircle size={10} /> {error}
+      </p>
+    )}
   </div>
 )
 
+// ── Modal principal ───────────────────────────────────────────────────────────
 type Step = 'account' | 'form' | 'summary'
 
 const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
@@ -37,44 +85,49 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
   const { customer, isLoggedIn, save, logout } = useCustomer()
   const { whatsapp } = getSettings()
 
-  // If already logged in, go directly to summary
   const [step, setStep] = useState<Step>(isLoggedIn ? 'summary' : 'account')
   const [form, setForm] = useState<Customer>(customer ?? EMPTY_CUSTOMER)
   const [saveAccount, setSaveAccount] = useState(true)
+  const [errors, setErrors] = useState<Errors>({})
+  const [touched, setTouched] = useState(false)
   const [done, setDone] = useState(false)
 
-  const set = (k: keyof Customer, v: string) =>
+  const set = (k: keyof Customer, v: string) => {
     setForm((f) => ({ ...f, [k]: v }))
+    if (touched) {
+      // revalidate on change after first attempt
+      setErrors((prev) => ({ ...prev, [k]: validate({ ...form, [k]: v })[k] }))
+    }
+  }
 
-  const canProceed =
-    form.name.trim() &&
-    form.phone.trim() &&
-    form.street.trim() &&
-    form.number.trim() &&
-    form.city.trim()
+  const handleProceed = () => {
+    setTouched(true)
+    const errs = validate(form)
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs)
+      return
+    }
+    setErrors({})
+    setStep('summary')
+  }
 
   const handleConfirm = () => {
     if (saveAccount) save(form)
 
-    // Build WhatsApp message
     const lines: string[] = ['Olá! Gostaria de fazer um pedido na *Lourds*:\n']
     lines.push('📦 *Itens:*')
     items.forEach((item) => {
       const sub = fmt(parseBRL(item.price) * item.qty)
-      lines.push(
-        `• ${item.qty}x ${item.name}${item.size ? ` (${item.size})` : ''} — ${sub}`,
-      )
+      lines.push(`• ${item.qty}x ${item.name}${item.size ? ` (${item.size})` : ''} — ${sub}`)
     })
     lines.push(`\n💰 *Total: ${fmt(total)}*`)
     lines.push('\n👤 *Meus dados:*')
     lines.push(`Nome: ${form.name}`)
     lines.push(`Telefone: ${form.phone}`)
-    if (form.email) lines.push(`E-mail: ${form.email}`)
-    lines.push(
-      `Endereço: ${form.street}, ${form.number}${form.neighborhood ? ` - ${form.neighborhood}` : ''}`,
-    )
-    if (form.cep) lines.push(`CEP: ${form.cep}`)
-    lines.push(`Cidade: ${form.city}${form.state ? ` - ${form.state}` : ''}`)
+    lines.push(`E-mail: ${form.email}`)
+    lines.push(`Endereço: ${form.street}, ${form.number} — ${form.neighborhood}`)
+    lines.push(`CEP: ${form.cep}`)
+    lines.push(`Cidade: ${form.city} - ${form.state}`)
 
     const msg = encodeURIComponent(lines.join('\n'))
     window.open(`https://wa.me/${whatsapp}?text=${msg}`, '_blank', 'noopener,noreferrer')
@@ -87,7 +140,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
     <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-background border border-border rounded-2xl w-full max-w-lg shadow-2xl my-4 relative">
 
-        {/* Close */}
+        {/* Fechar */}
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors z-10"
@@ -95,7 +148,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
           <X size={20} />
         </button>
 
-        {/* ── DONE ── */}
+        {/* ── CONCLUÍDO ── */}
         {done && (
           <div className="px-8 py-16 flex flex-col items-center text-center gap-4">
             <CheckCircle size={56} className="text-green-500" />
@@ -106,7 +159,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
           </div>
         )}
 
-        {/* ── STEP: ACCOUNT CHOICE ── */}
+        {/* ── STEP: ESCOLHA DE CONTA ── */}
         {!done && step === 'account' && (
           <div className="px-6 py-6">
             <h3 className="font-heading text-2xl font-semibold text-foreground mb-1">
@@ -115,8 +168,6 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
             <p className="font-body text-sm text-muted-foreground mb-6">
               Para prosseguir, identifique-se ou continue como visitante.
             </p>
-
-            {/* Logged-in shortcut (shouldn't appear, but safety) */}
             <div className="space-y-3">
               <button
                 onClick={() => setStep('form')}
@@ -127,12 +178,8 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
                     <User size={16} className="text-accent" />
                   </div>
                   <div className="text-left">
-                    <p className="font-body text-sm font-semibold text-foreground">
-                      Criar conta / Preencher dados
-                    </p>
-                    <p className="font-body text-xs text-muted-foreground">
-                      Salve seus dados para próximas compras
-                    </p>
+                    <p className="font-body text-sm font-semibold text-foreground">Criar conta / Preencher dados</p>
+                    <p className="font-body text-xs text-muted-foreground">Salve seus dados para próximas compras</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-muted-foreground group-hover:text-accent transition-colors" />
@@ -147,12 +194,8 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
                     <User size={16} className="text-muted-foreground" />
                   </div>
                   <div className="text-left">
-                    <p className="font-body text-sm font-semibold text-foreground">
-                      Continuar como visitante
-                    </p>
-                    <p className="font-body text-xs text-muted-foreground">
-                      Preencha seus dados sem salvar
-                    </p>
+                    <p className="font-body text-sm font-semibold text-foreground">Continuar como visitante</p>
+                    <p className="font-body text-xs text-muted-foreground">Preencha seus dados sem salvar</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -161,60 +204,119 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
           </div>
         )}
 
-        {/* ── STEP: FORM ── */}
+        {/* ── STEP: FORMULÁRIO ── */}
         {!done && step === 'form' && (
           <div>
-            {/* Header */}
             <div className="px-6 pt-6 pb-4 border-b border-border">
               <h3 className="font-heading text-xl font-semibold text-foreground">Seus Dados</h3>
               <p className="font-body text-xs text-muted-foreground mt-0.5">
-                Esses dados serão incluídos no pedido enviado pelo WhatsApp
+                Todos os campos são obrigatórios
               </p>
             </div>
 
             <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+
               {/* Dados pessoais */}
-              <p className="font-body text-[10px] uppercase tracking-[0.25em] text-accent">
-                Dados Pessoais
-              </p>
+              <p className="font-body text-[10px] uppercase tracking-[0.25em] text-accent">Dados Pessoais</p>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Nome Completo *">
-                  <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Seu nome" className={inputCls} />
+                <Field label="Nome Completo" error={errors.name}>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => set('name', e.target.value)}
+                    placeholder="Seu nome completo"
+                    className={errors.name ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="Telefone / WhatsApp *" half>
-                  <input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(79) 99999-9999" className={inputCls} />
+
+                <Field label="Telefone / WhatsApp" error={errors.phone} half>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => set('phone', e.target.value)}
+                    placeholder="(79) 99999-9999"
+                    className={errors.phone ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="E-mail">
-                  <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="seu@email.com" className={inputCls} />
+
+                <Field label="E-mail" error={errors.email}>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => set('email', e.target.value)}
+                    placeholder="seu@email.com"
+                    className={errors.email ? inputErr : inputOk}
+                  />
                 </Field>
               </div>
 
               {/* Endereço */}
-              <p className="font-body text-[10px] uppercase tracking-[0.25em] text-accent pt-2">
-                Endereço de Entrega
-              </p>
+              <p className="font-body text-[10px] uppercase tracking-[0.25em] text-accent pt-2">Endereço de Entrega</p>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Rua / Avenida *">
-                  <input type="text" value={form.street} onChange={(e) => set('street', e.target.value)} placeholder="Rua das Flores" className={inputCls} />
+                <Field label="Rua / Avenida" error={errors.street}>
+                  <input
+                    type="text"
+                    value={form.street}
+                    onChange={(e) => set('street', e.target.value)}
+                    placeholder="Rua das Flores"
+                    className={errors.street ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="Número *" half>
-                  <input type="text" value={form.number} onChange={(e) => set('number', e.target.value)} placeholder="123" className={inputCls} />
+
+                <Field label="Número" error={errors.number} half>
+                  <input
+                    type="text"
+                    value={form.number}
+                    onChange={(e) => set('number', e.target.value)}
+                    placeholder="123"
+                    className={errors.number ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="Bairro" half>
-                  <input type="text" value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} placeholder="Centro" className={inputCls} />
+
+                <Field label="Bairro" error={errors.neighborhood} half>
+                  <input
+                    type="text"
+                    value={form.neighborhood}
+                    onChange={(e) => set('neighborhood', e.target.value)}
+                    placeholder="Centro"
+                    className={errors.neighborhood ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="CEP" half>
-                  <input type="text" value={form.cep} onChange={(e) => set('cep', e.target.value)} placeholder="49000-000" maxLength={9} className={inputCls} />
+
+                <Field label="CEP" error={errors.cep} half>
+                  <input
+                    type="text"
+                    value={form.cep}
+                    onChange={(e) => set('cep', e.target.value)}
+                    placeholder="49000-000"
+                    maxLength={9}
+                    className={errors.cep ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="Cidade *" half>
-                  <input type="text" value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Aracaju" className={inputCls} />
+
+                <Field label="Cidade" error={errors.city} half>
+                  <input
+                    type="text"
+                    value={form.city}
+                    onChange={(e) => set('city', e.target.value)}
+                    placeholder="Aracaju"
+                    className={errors.city ? inputErr : inputOk}
+                  />
                 </Field>
-                <Field label="Estado" half>
-                  <input type="text" value={form.state} onChange={(e) => set('state', e.target.value)} placeholder="SE" maxLength={2} className={inputCls} />
+
+                <Field label="Estado (sigla)" error={errors.state} half>
+                  <input
+                    type="text"
+                    value={form.state}
+                    onChange={(e) => set('state', e.target.value.toUpperCase())}
+                    placeholder="SE"
+                    maxLength={2}
+                    className={errors.state ? inputErr : inputOk}
+                  />
                 </Field>
               </div>
 
-              {/* Save account toggle */}
+              {/* Salvar conta */}
               <label className="flex items-center gap-3 cursor-pointer pt-1">
                 <div
                   onClick={() => setSaveAccount((s) => !s)}
@@ -222,15 +324,9 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
                     saveAccount ? 'bg-accent' : 'bg-muted'
                   }`}
                 >
-                  <div
-                    className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      saveAccount ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
+                  <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${saveAccount ? 'translate-x-5' : 'translate-x-0'}`} />
                 </div>
-                <span className="font-body text-sm text-foreground">
-                  Salvar meus dados para próximas compras
-                </span>
+                <span className="font-body text-sm text-foreground">Salvar meus dados para próximas compras</span>
               </label>
             </div>
 
@@ -242,9 +338,8 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
                 Voltar
               </button>
               <button
-                onClick={() => setStep('summary')}
-                disabled={!canProceed}
-                className="flex-1 bg-accent text-accent-foreground font-body text-xs uppercase tracking-widest py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleProceed}
+                className="flex-1 bg-accent text-accent-foreground font-body text-xs uppercase tracking-widest py-3 rounded-lg hover:opacity-90 transition-opacity"
               >
                 Revisar Pedido
               </button>
@@ -252,7 +347,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
           </div>
         )}
 
-        {/* ── STEP: SUMMARY ── */}
+        {/* ── STEP: RESUMO ── */}
         {!done && step === 'summary' && (
           <div>
             <div className="px-6 pt-6 pb-4 border-b border-border flex items-center justify-between">
@@ -271,39 +366,26 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
             </div>
 
             <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
-              {/* Customer info */}
+              {/* Dados do cliente */}
               <div className="bg-card border border-border rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="font-body text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Seus Dados
-                  </p>
-                  <button
-                    onClick={() => setStep('form')}
-                    className="font-body text-xs text-accent hover:underline"
-                  >
+                  <p className="font-body text-[10px] uppercase tracking-widest text-muted-foreground">Seus Dados</p>
+                  <button onClick={() => setStep('form')} className="font-body text-xs text-accent hover:underline">
                     Editar
                   </button>
                 </div>
                 <div className="space-y-0.5 font-body text-sm text-foreground">
                   <p className="font-semibold">{form.name}</p>
                   <p className="text-muted-foreground">{form.phone}</p>
-                  {form.email && <p className="text-muted-foreground">{form.email}</p>}
-                  <p className="text-muted-foreground">
-                    {form.street}, {form.number}
-                    {form.neighborhood ? ` — ${form.neighborhood}` : ''}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {form.city}{form.state ? ` - ${form.state}` : ''}
-                    {form.cep ? ` · CEP ${form.cep}` : ''}
-                  </p>
+                  <p className="text-muted-foreground">{form.email}</p>
+                  <p className="text-muted-foreground">{form.street}, {form.number} — {form.neighborhood}</p>
+                  <p className="text-muted-foreground">CEP {form.cep} · {form.city} - {form.state}</p>
                 </div>
               </div>
 
-              {/* Items */}
+              {/* Itens */}
               <div>
-                <p className="font-body text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
-                  Itens do Pedido
-                </p>
+                <p className="font-body text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Itens do Pedido</p>
                 <div className="space-y-2">
                   {items.map((item) => (
                     <div key={item.id} className="flex items-center gap-3">
@@ -325,9 +407,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
               {/* Total */}
               <div className="flex items-center justify-between border-t border-border pt-4">
                 <span className="font-body text-sm text-muted-foreground">Total</span>
-                <span className="font-heading text-2xl font-semibold text-foreground">
-                  {fmt(total)}
-                </span>
+                <span className="font-heading text-2xl font-semibold text-foreground">{fmt(total)}</span>
               </div>
 
               <div className="bg-muted/50 rounded-lg px-4 py-3">
@@ -356,6 +436,7 @@ const CheckoutModal = ({ onClose, onSuccess }: CheckoutModalProps) => {
             </div>
           </div>
         )}
+
       </div>
     </div>
   )
