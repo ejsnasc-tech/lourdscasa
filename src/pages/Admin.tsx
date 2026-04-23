@@ -316,6 +316,7 @@ const ProductFormModal = ({ initial, onSave, onClose }: ProductFormProps) => {
   const [price, setPrice] = useState(initial.price ?? '')
   const [originalPrice, setOriginalPrice] = useState(initial.originalPrice ?? '')
   const [image, setImage] = useState(initial.image ?? '')
+  const [imageLoading, setImageLoading] = useState(false)
   const [sizes, setSizes] = useState<SizeStock[]>(
     initial.sizes && initial.sizes.length > 0
       ? initial.sizes
@@ -326,6 +327,18 @@ const ProductFormModal = ({ initial, onSave, onClose }: ProductFormProps) => {
   const removeSize = (i: number) => setSizes((s) => s.filter((_, idx) => idx !== i))
   const updateSize = (i: number, field: keyof SizeStock, value: string | number) =>
     setSizes((s) => s.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)))
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageLoading(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImage(reader.result as string)
+      setImageLoading(false)
+    }
+    reader.readAsDataURL(file)
+  }
 
   const canSave = name.trim() && price.trim() && image.trim()
 
@@ -432,26 +445,40 @@ const ProductFormModal = ({ initial, onSave, onClose }: ProductFormProps) => {
           </div>
 
           {/* Foto */}
-          <Field label="Foto do Produto">
-            <input
-              type="url"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-              placeholder="https://... (cole a URL da imagem)"
-              className={inputCls}
-            />
-            {image ? (
-              <img
-                src={image}
-                alt="preview"
-                className="mt-2 h-24 w-16 object-cover rounded-lg border border-border"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          <Field label="Foto do Produto" required>
+            <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-accent transition-colors bg-card group">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
               />
-            ) : (
-              <div className="mt-2 h-20 border-2 border-dashed border-border rounded-lg flex items-center justify-center">
-                <p className="font-body text-xs text-muted-foreground">Cole a URL da foto acima</p>
-              </div>
-            )}
+              {imageLoading ? (
+                <div className="py-8 flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  <p className="font-body text-xs text-muted-foreground">Carregando...</p>
+                </div>
+              ) : image ? (
+                <div className="relative w-full">
+                  <img
+                    src={image}
+                    alt="preview"
+                    className="h-40 w-full object-cover rounded-lg"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <p className="font-body text-xs text-white uppercase tracking-widest">Trocar foto</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 flex flex-col items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground group-hover:text-accent transition-colors"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <p className="font-body text-sm text-muted-foreground group-hover:text-accent transition-colors">
+                    Clique para selecionar uma foto
+                  </p>
+                  <p className="font-body text-[10px] text-muted-foreground/60">JPG, PNG, WEBP — até 5 MB</p>
+                </div>
+              )}
+            </label>
           </Field>
 
           {/* Tamanhos e Estoque */}
@@ -740,6 +767,14 @@ const SettingsTab = ({ settings, onUpdate }: SettingsTabProps) => {
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [pwMsg, setPwMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [waNumber, setWaNumber] = useState(settings.whatsapp)
+  const [waSaved, setWaSaved] = useState(false)
+
+  const handleSaveWa = () => {
+    onUpdate({ ...settings, whatsapp: waNumber })
+    setWaSaved(true)
+    setTimeout(() => setWaSaved(false), 3000)
+  }
 
   const handleChangePw = () => {
     if (!checkAdminPassword(oldPw)) {
@@ -773,10 +808,8 @@ const SettingsTab = ({ settings, onUpdate }: SettingsTabProps) => {
           <Field label="Número (somente dígitos — DDI + DDD + número)">
             <input
               type="text"
-              value={settings.whatsapp}
-              onChange={(e) =>
-                onUpdate({ ...settings, whatsapp: e.target.value.replace(/\D/g, '') })
-              }
+              value={waNumber}
+              onChange={(e) => { setWaNumber(e.target.value.replace(/\D/g, '')); setWaSaved(false) }}
               placeholder="5579999998888"
               maxLength={15}
               className={inputCls}
@@ -785,6 +818,16 @@ const SettingsTab = ({ settings, onUpdate }: SettingsTabProps) => {
               Exemplo: 5579988887766 → 55 (Brasil) + 79 (SE) + número
             </p>
           </Field>
+          {waSaved && (
+            <p className="font-body text-xs text-green-600">✓ Número salvo com sucesso!</p>
+          )}
+          <button
+            onClick={handleSaveWa}
+            disabled={!waNumber || waNumber === settings.whatsapp}
+            className="bg-accent text-accent-foreground font-body text-xs uppercase tracking-widest px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-35 disabled:cursor-not-allowed"
+          >
+            Salvar Número
+          </button>
         </div>
 
         {/* Senha */}
