@@ -1,15 +1,15 @@
 import ProductCard from './ProductCard'
-import { products } from '@/data/products'
-import type { Filter } from '@/data/products'
+import type { Product, Filter } from '@/data/products'
 
 const filterList: Filter[] = ['Todos', 'Feminino', 'Masculino', 'Infantil', 'Novidades']
 
 interface CatalogSectionProps {
+  products: Product[]
   activeFilter: Filter
   onFilterChange: (f: Filter) => void
 }
 
-const CatalogSection = ({ activeFilter, onFilterChange }: CatalogSectionProps) => {
+const CatalogSection = ({ products, activeFilter, onFilterChange }: CatalogSectionProps) => {
   const filtered =
     activeFilter === 'Todos'
       ? products

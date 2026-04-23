@@ -1,13 +1,20 @@
 export type Category = 'Feminino' | 'Masculino' | 'Infantil'
 export type Filter = 'Todos' | Category | 'Novidades'
 
+export interface SizeStock {
+  size: string
+  stock: number
+}
+
 export interface Product {
   id: number
   image: string
   name: string
+  description?: string
   price: string
   originalPrice?: string
   category: Category
+  sizes?: SizeStock[]
   isNew?: boolean
 }
 

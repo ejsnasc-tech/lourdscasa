@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, ShoppingBag } from 'lucide-react'
 import type { Filter } from '@/data/products'
+import { useCart } from '@/context/CartContext'
 
 interface HeaderProps {
   activeFilter: Filter
@@ -17,6 +18,7 @@ const navItems: { label: string; filter: Filter }[] = [
 const Header = ({ activeFilter, onFilterChange }: HeaderProps) => {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const cartCtx = useCart()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60)
@@ -59,13 +61,28 @@ const Header = ({ activeFilter, onFilterChange }: HeaderProps) => {
           ))}
         </nav>
 
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden text-secondary"
-          aria-label="Menu"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Cart button */}
+          <button
+            onClick={() => cartCtx.setOpen(true)}
+            aria-label="Carrinho"
+            className="relative text-secondary hover:text-accent transition-colors"
+          >
+            <ShoppingBag size={22} />
+            {cartCtx.count > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-accent text-accent-foreground font-body text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {cartCtx.count > 9 ? '9+' : cartCtx.count}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="md:hidden text-secondary"
+            aria-label="Menu"
+          >
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {isOpen && (

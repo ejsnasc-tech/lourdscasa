@@ -1,6 +1,10 @@
 import { Instagram, Phone, Mail } from 'lucide-react'
 
-const Footer = () => {
+interface FooterProps {
+  whatsapp: string
+}
+
+const Footer = ({ whatsapp }: FooterProps) => {
   return (
     <footer className="bg-foreground text-secondary/80 py-16">
       <div className="container mx-auto px-6 lg:px-16">
@@ -46,12 +50,12 @@ const Footer = () => {
                 <Instagram size={16} /> @lojalourds
               </a>
               <a
-                href="https://wa.me/5511999999999"
+                href={`https://wa.me/${whatsapp}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 font-body text-sm hover:text-secondary transition-colors"
               >
-                <Phone size={16} /> (11) 99999-9999
+                <Phone size={16} /> WhatsApp
               </a>
               <a
                 href="mailto:contato@lojalourds.com"
